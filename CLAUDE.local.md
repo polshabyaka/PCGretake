@@ -24,15 +24,19 @@
 - If unsure, choose the most obvious and plain name.
 
 ## Comments
-- Comments should be rare and only when they help.
-- Comments should sound natural and simple, not overly formal.
-- Short reminder-style comments are okay.
-- Do not add many comments.
+- Add simple, silly-but-meaningful comments on every important part so the code feels student-written.
+- Comments should sound natural and casual, not formal. Short is good.
+- Mix in some Russian comments too (not all, just some alive ones), especially for "thinking out loud" moments like "хм, не уверена что так надо, проверю завтра".
 - Do not write “AI-style” explanatory essays inside code.
-- Small casual comments are okay sometimes, for example like:
+- One short line per comment. Don't comment obvious things like `// set x to 5`.
+- Comment the *why* / the intent, not the exact mechanics.
+- Small casual comments are very welcome, for example like:
   - `// jump a bit higher here`
   - `// idk why but this works`
   - `// маленькая задержка (´・ω・`)`
+  - `// хм, не уверена что это так должно работать, проверю завтра`
+  - `// middle-ish cell is home`
+  - `// домик в серединке`
 
 ## How to work with me
 - Explain things simply, as if I am still learning.

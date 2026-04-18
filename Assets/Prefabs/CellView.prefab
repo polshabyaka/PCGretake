@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5394137036745793364}
   - component: {fileID: 8907523260721565284}
+  - component: {fileID: 1495052312751436561}
   m_Layer: 0
   m_Name: CellView
   m_TagString: Untagged
@@ -84,3 +85,18 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
+--- !u!114 &1495052312751436561
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2376867227982485446}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b5e7c43621afb374ea13f5c2dac6cac6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sprite: {fileID: 8907523260721565284}
+  normalColor: {r: 0.57254905, g: 0.9725491, b: 0.81568635, a: 1}
+  homeColor: {r: 0.3019608, g: 0.18039216, b: 0.14901961, a: 1}

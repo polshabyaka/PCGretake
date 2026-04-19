@@ -22,6 +22,14 @@ public class GridManager : MonoBehaviour
     public int maxUnreachableWalkable = 20;  // сколько walkable-островков терпим
     public int maxRegenerateAttempts = 20;   // чтоб не крутиться бесконечно
 
+    // PCG loot settings
+    public LootItem lootPrefab;          // простой кружочек с LootItem скриптом
+    public int commonMaxDistance = 4;    // d <= это -> common
+    public int rareMinDistance = 10;     // d >= это -> rare (между ними uncommon)
+    public int commonLootCount = 6;
+    public int uncommonLootCount = 4;
+    public int rareLootCount = 2;
+
     // two 2D arrays, one for data and one for visuals lookup by [x, y]
     // хм не уверена что так лучше всего, но пока работает проверю завтра
     public CellData[,] cells;
@@ -29,6 +37,10 @@ public class GridManager : MonoBehaviour
 
     // чтоб не потерять ссылку на игрока потом
     public Player player;
+
+    // список лута, чтоб можно было чистить список при регенерации
+    // (сами объекты уже снесутся вместе с детьми mapRoot)
+    List<GameObject> activeLoot = new List<GameObject>();
 
     void Start()
     {
@@ -47,7 +59,7 @@ public class GridManager : MonoBehaviour
     // и на Start, и по R — один путь
     void Regenerate()
     {
-        ClearOldViews();
+        ClearOldViews(); // сносит и клетки, и лут (они все дети mapRoot)
 
         bool accepted = false;
         for (int attempt = 0; attempt < maxRegenerateAttempts; attempt++)
@@ -59,6 +71,7 @@ public class GridManager : MonoBehaviour
             GenerateCellData(noiseOffsetX, noiseOffsetY);
             CarveSafeHomeArea(); // домик и 4 соседа всегда проходимы
             MarkHomeCell();
+            FillDistanceMap();   // нужно для валидации и для лута
 
             if (ValidateMap())
             {
@@ -75,9 +88,10 @@ public class GridManager : MonoBehaviour
         InstantiateCellViews();
         RepaintAllCells();
         PlacePlayerAtHome();
+        PlaceLoot();
     }
 
-    // снести старые спрайты клеток, иначе при R они будут накладываться
+    // снести старые спрайты клеток и лут одним махом
     void ClearOldViews()
     {
         if (mapRoot == null) return;
@@ -154,23 +168,16 @@ public class GridManager : MonoBehaviour
         cells[cx, cy].type = CellType.Home;
     }
 
-    // PCG: reachable area check
-    // flood fill from home; forests block, 4-directional; tracks BFS step depth
-    void BFSFromHome(out bool[,] visited, out int reachableCount, out int furthestDistance)
+    // PCG: Dijkstra distance map — BFS from home (step cost = 1, so BFS == Dijkstra)
+    void FillDistanceMap()
     {
-        visited = new bool[width, height];
-        reachableCount = 0;
-        furthestDistance = 0;
-
         int cx = width / 2;
         int cy = height / 2;
 
-        int[,] depth = new int[width, height];
-        Queue<Vector2Int> frontier = new Queue<Vector2Int>();
+        cells[cx, cy].distanceFromHome = 0;
 
-        visited[cx, cy] = true;
+        Queue<Vector2Int> frontier = new Queue<Vector2Int>();
         frontier.Enqueue(new Vector2Int(cx, cy));
-        reachableCount = 1;
 
         int[] dx = { 1, -1, 0, 0 };
         int[] dy = { 0, 0, 1, -1 };
@@ -178,42 +185,56 @@ public class GridManager : MonoBehaviour
         while (frontier.Count > 0)
         {
             Vector2Int c = frontier.Dequeue();
-            int cd = depth[c.x, c.y];
-            if (cd > furthestDistance) furthestDistance = cd;
+            int cd = cells[c.x, c.y].distanceFromHome;
 
             for (int i = 0; i < 4; i++)
             {
                 int nx = c.x + dx[i];
                 int ny = c.y + dy[i];
                 if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-                if (visited[nx, ny]) continue;
+                if (cells[nx, ny].distanceFromHome >= 0) continue; // уже посетили
                 if (cells[nx, ny].type == CellType.Forest) continue;
 
-                visited[nx, ny] = true;
-                depth[nx, ny] = cd + 1;
+                cells[nx, ny].distanceFromHome = cd + 1;
                 frontier.Enqueue(new Vector2Int(nx, ny));
-                reachableCount++;
             }
         }
     }
 
-    // run BFS once, then check rules against its results
+    // validation reads distances straight from cells
     bool ValidateMap()
     {
-        bool[,] visited;
-        int reachableCount, furthestDistance;
-        BFSFromHome(out visited, out reachableCount, out furthestDistance);
-
         int cx = width / 2;
         int cy = height / 2;
 
         // PCG: validation check — home not trapped
         bool hasOpenNeighbor =
-            (cx + 1 < width  && visited[cx + 1, cy]) ||
-            (cx - 1 >= 0     && visited[cx - 1, cy]) ||
-            (cy + 1 < height && visited[cx, cy + 1]) ||
-            (cy - 1 >= 0     && visited[cx, cy - 1]);
+            (cx + 1 < width  && cells[cx + 1, cy].distanceFromHome >= 0) ||
+            (cx - 1 >= 0     && cells[cx - 1, cy].distanceFromHome >= 0) ||
+            (cy + 1 < height && cells[cx, cy + 1].distanceFromHome >= 0) ||
+            (cy - 1 >= 0     && cells[cx, cy - 1].distanceFromHome >= 0);
         if (!hasOpenNeighbor) return false;
+
+        int reachableCount = 0;
+        int furthestDistance = 0;
+        int walkableUnreachable = 0;
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                int d = cells[x, y].distanceFromHome;
+                if (d >= 0)
+                {
+                    reachableCount++;
+                    if (d > furthestDistance) furthestDistance = d;
+                }
+                else if (cells[x, y].type != CellType.Forest)
+                {
+                    walkableUnreachable++;
+                }
+            }
+        }
 
         // PCG: validation check — enough reachable area
         if (reachableCount < minReachableCells) return false;
@@ -222,15 +243,6 @@ public class GridManager : MonoBehaviour
         if (furthestDistance < minFarDistance) return false;
 
         // PCG: validation check — not too many isolated walkable islands
-        int walkableUnreachable = 0;
-        for (int x = 0; x < width; x++)
-        {
-            for (int y = 0; y < height; y++)
-            {
-                if (cells[x, y].type != CellType.Forest && !visited[x, y])
-                    walkableUnreachable++;
-            }
-        }
         if (walkableUnreachable > maxUnreachableWalkable) return false;
 
         return true;
@@ -248,6 +260,62 @@ public class GridManager : MonoBehaviour
                 bool alt = (x + y) % 2 == 1;
                 cellViews[x, y].SetType(cells[x, y].type, alt);
             }
+        }
+    }
+
+    // PCG: loot placement by distance — split reachable cells into rarity bands
+    void PlaceLoot()
+    {
+        // сами объекты уже уничтожены вместе с детьми mapRoot в ClearOldViews,
+        // просто очищаем список, чтоб не держать мёртвые ссылки
+        activeLoot.Clear();
+
+        if (lootPrefab == null) return; // забыли кинуть префаб — просто ничего не ставим
+
+        List<Vector2Int> commonCells = new List<Vector2Int>();
+        List<Vector2Int> uncommonCells = new List<Vector2Int>();
+        List<Vector2Int> rareCells = new List<Vector2Int>();
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                int d = cells[x, y].distanceFromHome;
+                if (d <= 0) continue; // пропускаем Home (d==0) и недостижимые (d==-1)
+
+                Vector2Int p = new Vector2Int(x, y);
+                if (d <= commonMaxDistance)
+                    commonCells.Add(p);
+                else if (d >= rareMinDistance)
+                    rareCells.Add(p);
+                else
+                    uncommonCells.Add(p);
+            }
+        }
+
+        SpawnLootBand(commonCells, commonLootCount, LootRarity.Common);
+        SpawnLootBand(uncommonCells, uncommonLootCount, LootRarity.Uncommon);
+        SpawnLootBand(rareCells, rareLootCount, LootRarity.Rare);
+    }
+
+    // берём count случайных клеток без повторов и ставим на них лут
+    void SpawnLootBand(List<Vector2Int> band, int count, LootRarity rarity)
+    {
+        int actual = Mathf.Min(count, band.Count);
+        for (int i = 0; i < actual; i++)
+        {
+            // swap-with-random — достаём уникальные клетки, никто не дублируется
+            int j = Random.Range(i, band.Count);
+            Vector2Int picked = band[j];
+            band[j] = band[i];
+
+            // чуть вытаскиваем вперёд по z, чтоб кружок рисовался поверх клетки
+            Vector3 cellPos = GridToWorld(picked.x, picked.y);
+            Vector3 pos = new Vector3(cellPos.x, cellPos.y, -0.1f);
+
+            LootItem loot = Instantiate(lootPrefab, pos, Quaternion.identity, mapRoot);
+            loot.SetRarity(rarity);
+            activeLoot.Add(loot.gameObject);
         }
     }
 

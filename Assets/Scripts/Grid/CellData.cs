@@ -15,6 +15,9 @@ public class CellData
     public int y;
     public CellType type;
 
+    // шаги BFS от дома; -1 = недостижимо или лес
+    public int distanceFromHome = -1;
+
     public CellData(int x, int y)
     {
         this.x = x;

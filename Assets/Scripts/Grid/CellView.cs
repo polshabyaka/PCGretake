@@ -3,16 +3,15 @@ using UnityEngine;
 // the visual half of a cell, just paints itself a color
 public class CellView : MonoBehaviour
 {
-    public SpriteRenderer sprite; // drag the prefab's SpriteRenderer here
+    public SpriteRenderer sprite; // drag SpriteRenderer 
 
     // colors per type, tweak in inspector if you want
     // хм, может потом заменю на SO чтобы цвета в одном месте были
-    public Color normalColor = Color.white;                       // обычная клетка, вариант A
-    public Color normalColorB = new Color(0.92f, 0.92f, 0.92f);   // вариант B для шашечек, чуть темнее
+    public Color normalColor = new Color(0.80f, 0.92f, 0.87f);
+    public Color normalColorB = new Color(0.72f, 0.86f, 0.80f);   // вариант B чтоб сетку видно было, чуть темнее
     public Color homeColor = Color.yellow;
 
-    // pick a color based on what kind of cell this is
-    // altTile is only used for Normal cells — это та самая шашечка
+    //цвет по типам клеточек
     public void SetType(CellType type, bool altTile = false)
     {
         // пока простой if, потом наверно switch будет когда типов больше

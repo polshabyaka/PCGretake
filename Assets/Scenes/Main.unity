@@ -423,6 +423,8 @@ MonoBehaviour:
   height: 20
   cellPrefab: {fileID: 1495052312751436561, guid: 9c98d9e2edf38ec4e8a375210a31c023, type: 3}
   mapRoot: {fileID: 1488168132}
+  playerPrefab: {fileID: 9206340921290283831, guid: 99c8d27eaabc9c543873635f43264ba2, type: 3}
+  player: {fileID: 0}
 --- !u!1 &1354840295
 GameObject:
   m_ObjectHideFlags: 0

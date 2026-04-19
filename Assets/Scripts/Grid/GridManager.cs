@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // builds the whole grid when the game starts
@@ -14,6 +15,12 @@ public class GridManager : MonoBehaviour
     // perlin settings, крутить в инспекторе пока не станет красиво
     public float noiseScale = 0.15f;      // чем меньше — тем крупнее пятна леса
     public float forestThreshold = 0.55f; // выше = меньше леса
+
+    // PCG validation thresholds, tweak in inspector
+    public int minReachableCells = 50;       // минимум проходимых клеток из дома
+    public int minFarDistance = 8;           // в шагах BFS от дома, не манхэттен
+    public int maxUnreachableWalkable = 20;  // сколько walkable-островков терпим
+    public int maxRegenerateAttempts = 20;   // чтоб не крутиться бесконечно
 
     // two 2D arrays, one for data and one for visuals lookup by [x, y]
     // хм не уверена что так лучше всего, но пока работает проверю завтра
@@ -42,19 +49,31 @@ public class GridManager : MonoBehaviour
     {
         ClearOldViews();
 
-        // свежий рандом каждый раз — и на старте, и по R
-        // берём большой offset чтоб perlin выдавал разные куски шума
-        float noiseOffsetX = Random.Range(0f, 9999f);
-        float noiseOffsetY = Random.Range(0f, 9999f);
+        bool accepted = false;
+        for (int attempt = 0; attempt < maxRegenerateAttempts; attempt++)
+        {
+            // свежий рандом каждый раз — и на старте, и по R (и на каждом ретрае)
+            float noiseOffsetX = Random.Range(0f, 9999f);
+            float noiseOffsetY = Random.Range(0f, 9999f);
 
-        BuildCells(noiseOffsetX, noiseOffsetY);
-        CarveSafeHomeArea(); // домик и 4 соседа всегда проходимы
-        MarkHomeCell();
+            GenerateCellData(noiseOffsetX, noiseOffsetY);
+            CarveSafeHomeArea(); // домик и 4 соседа всегда проходимы
+            MarkHomeCell();
 
-        // ВАЖНО: перекрашиваем ВСЕ клетки по финальным данным
-        // (а то forest в safe-зоне останется зелёным визуально)
+            if (ValidateMap())
+            {
+                accepted = true;
+                break;
+            }
+            // PCG: regenerate bad map — loop rolls a new seed on next iteration
+        }
+
+        if (!accepted)
+            Debug.LogWarning("PCG: map validation never passed, using last map — loosen thresholds?");
+
+        // визуалки создаём один раз, уже по принятой карте
+        InstantiateCellViews();
         RepaintAllCells();
-
         PlacePlayerAtHome();
     }
 
@@ -66,11 +85,10 @@ public class GridManager : MonoBehaviour
             Destroy(mapRoot.GetChild(i).gameObject);
     }
 
-    // создать данные + визуалки, типы ставим по perlin
-    void BuildCells(float offX, float offY)
+    // только данные, без визуалок — так дёшево ретраить при валидации
+    void GenerateCellData(float offX, float offY)
     {
         cells = new CellData[width, height];
-        cellViews = new CellView[width, height];
 
         for (int x = 0; x < width; x++)
         {
@@ -84,12 +102,23 @@ public class GridManager : MonoBehaviour
                     data.type = CellType.Forest;
 
                 cells[x, y] = data;
+            }
+        }
+    }
 
+    // спавним CellView-ы по готовым данным
+    void InstantiateCellViews()
+    {
+        cellViews = new CellView[width, height];
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
                 Vector3 pos = GridToWorld(x, y);
                 CellView view = Instantiate(cellPrefab, pos, Quaternion.identity, mapRoot);
                 view.name = "Cell_" + x + "_" + y; // чтобы в иерархии было понятно что где
                 cellViews[x, y] = view;
-                // цвет поставим потом в RepaintAllCells, чтоб не рисовать дважды
             }
         }
     }
@@ -123,6 +152,88 @@ public class GridManager : MonoBehaviour
         int cx = width / 2;
         int cy = height / 2;
         cells[cx, cy].type = CellType.Home;
+    }
+
+    // PCG: reachable area check
+    // flood fill from home; forests block, 4-directional; tracks BFS step depth
+    void BFSFromHome(out bool[,] visited, out int reachableCount, out int furthestDistance)
+    {
+        visited = new bool[width, height];
+        reachableCount = 0;
+        furthestDistance = 0;
+
+        int cx = width / 2;
+        int cy = height / 2;
+
+        int[,] depth = new int[width, height];
+        Queue<Vector2Int> frontier = new Queue<Vector2Int>();
+
+        visited[cx, cy] = true;
+        frontier.Enqueue(new Vector2Int(cx, cy));
+        reachableCount = 1;
+
+        int[] dx = { 1, -1, 0, 0 };
+        int[] dy = { 0, 0, 1, -1 };
+
+        while (frontier.Count > 0)
+        {
+            Vector2Int c = frontier.Dequeue();
+            int cd = depth[c.x, c.y];
+            if (cd > furthestDistance) furthestDistance = cd;
+
+            for (int i = 0; i < 4; i++)
+            {
+                int nx = c.x + dx[i];
+                int ny = c.y + dy[i];
+                if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                if (visited[nx, ny]) continue;
+                if (cells[nx, ny].type == CellType.Forest) continue;
+
+                visited[nx, ny] = true;
+                depth[nx, ny] = cd + 1;
+                frontier.Enqueue(new Vector2Int(nx, ny));
+                reachableCount++;
+            }
+        }
+    }
+
+    // run BFS once, then check rules against its results
+    bool ValidateMap()
+    {
+        bool[,] visited;
+        int reachableCount, furthestDistance;
+        BFSFromHome(out visited, out reachableCount, out furthestDistance);
+
+        int cx = width / 2;
+        int cy = height / 2;
+
+        // PCG: validation check — home not trapped
+        bool hasOpenNeighbor =
+            (cx + 1 < width  && visited[cx + 1, cy]) ||
+            (cx - 1 >= 0     && visited[cx - 1, cy]) ||
+            (cy + 1 < height && visited[cx, cy + 1]) ||
+            (cy - 1 >= 0     && visited[cx, cy - 1]);
+        if (!hasOpenNeighbor) return false;
+
+        // PCG: validation check — enough reachable area
+        if (reachableCount < minReachableCells) return false;
+
+        // PCG: validation check — far reachable cell exists (BFS steps, not manhattan)
+        if (furthestDistance < minFarDistance) return false;
+
+        // PCG: validation check — not too many isolated walkable islands
+        int walkableUnreachable = 0;
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (cells[x, y].type != CellType.Forest && !visited[x, y])
+                    walkableUnreachable++;
+            }
+        }
+        if (walkableUnreachable > maxUnreachableWalkable) return false;
+
+        return true;
     }
 
     // один проход — перекрашиваем всё по финальным типам

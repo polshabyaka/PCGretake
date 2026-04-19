@@ -1,9 +1,10 @@
 // little list of cell types, will grow later (water, forest, etc)
-// пока только два, потом добавлю больше когда будет генерация
+// пока три, дальше добавим ещё когда понадобится
 public enum CellType
 {
     Normal,
-    Home
+    Home,
+    Forest // деревья, ходить нельзя
 }
 
 // tiny data bag for one cell, no Unity stuff here on purpose

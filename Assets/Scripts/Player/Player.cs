@@ -34,6 +34,9 @@ public class Player : MonoBehaviour
         if (nx < 0 || nx >= grid.width) return;
         if (ny < 0 || ny >= grid.height) return;
 
+        // в лес не ходим, там волки ( ˘･_･˘ )
+        if (grid.cells[nx, ny].type == CellType.Forest) return;
+
         gridX = nx;
         gridY = ny;
         transform.position = grid.GridToWorld(gridX, gridY); // прыг на новую клетку

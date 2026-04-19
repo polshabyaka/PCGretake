@@ -11,10 +11,18 @@ public class CellView : MonoBehaviour
     public Color normalColorB = new Color(0.72f, 0.86f, 0.80f);   // вариант B чтоб сетку видно было, чуть темнее
     public Color homeColor = Color.yellow;
     public Color forestColor = new Color(0.20f, 0.45f, 0.25f); // тёмно-зелёный, как лесок
+    public Color hiddenColor = new Color(0.10f, 0.10f, 0.12f); // почти чёрный — туман войны
 
     //цвет по типам клеточек
-    public void SetType(CellType type, bool altTile = false)
+    public void SetType(CellType type, bool altTile = false, bool revealed = true)
     {
+        // туман сверху всего — не открыта, значит просто тёмненько
+        if (!revealed)
+        {
+            sprite.color = hiddenColor;
+            return;
+        }
+
         // пока простой if, потом наверно switch будет когда типов больше
         if (type == CellType.Home)
             sprite.color = homeColor; // home sweet home

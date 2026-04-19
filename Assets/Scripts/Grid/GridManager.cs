@@ -30,6 +30,9 @@ public class GridManager : MonoBehaviour
     public int uncommonLootCount = 4;
     public int rareLootCount = 2;
 
+    // fog of war: радиус открытия вокруг игрока (и вокруг дома на старте)
+    public int revealRadius = 3;
+
     // two 2D arrays, one for data and one for visuals lookup by [x, y]
     // хм не уверена что так лучше всего, но пока работает проверю завтра
     public CellData[,] cells;
@@ -41,6 +44,8 @@ public class GridManager : MonoBehaviour
     // список лута, чтоб можно было чистить список при регенерации
     // (сами объекты уже снесутся вместе с детьми mapRoot)
     List<GameObject> activeLoot = new List<GameObject>();
+    // параллельный список клеточек для лута — нужен чтобы прятать/показывать по туману
+    List<Vector2Int> activeLootCells = new List<Vector2Int>();
 
     void Start()
     {
@@ -89,6 +94,9 @@ public class GridManager : MonoBehaviour
         RepaintAllCells();
         PlacePlayerAtHome();
         PlaceLoot();
+
+        // стартовая зона видимости вокруг дома — и сразу refresh визуалов/лута
+        RevealArea(width / 2, height / 2, revealRadius);
     }
 
     // снести старые спрайты клеток и лут одним махом
@@ -258,8 +266,36 @@ public class GridManager : MonoBehaviour
             {
                 // шашечка по координатам, чтоб глазу было легче читать сетку
                 bool alt = (x + y) % 2 == 1;
-                cellViews[x, y].SetType(cells[x, y].type, alt);
+                cellViews[x, y].SetType(cells[x, y].type, alt, cells[x, y].revealed);
             }
+        }
+    }
+
+    // fog of war: reveal pass — mark Manhattan diamond revealed, then refresh visuals + loot
+    public void RevealArea(int centerX, int centerY, int radius)
+    {
+        for (int dy = -radius; dy <= radius; dy++)
+        {
+            for (int dx = -radius; dx <= radius; dx++)
+            {
+                if (Mathf.Abs(dx) + Mathf.Abs(dy) > radius) continue; // ромбик, не квадрат
+                int nx = centerX + dx;
+                int ny = centerY + dy;
+                if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                cells[nx, ny].revealed = true;
+            }
+        }
+
+        // перекрашиваем всю сетку — для 20x20 это копейки
+        RepaintAllCells();
+
+        // прячем/показываем лут в зависимости от того, открыта ли его клетка
+        for (int i = 0; i < activeLoot.Count; i++)
+        {
+            Vector2Int cellPos = activeLootCells[i];
+            bool visible = cells[cellPos.x, cellPos.y].revealed;
+            if (activeLoot[i] != null)
+                activeLoot[i].SetActive(visible);
         }
     }
 
@@ -267,8 +303,9 @@ public class GridManager : MonoBehaviour
     void PlaceLoot()
     {
         // сами объекты уже уничтожены вместе с детьми mapRoot в ClearOldViews,
-        // просто очищаем список, чтоб не держать мёртвые ссылки
+        // просто очищаем списки, чтоб не держать мёртвые ссылки
         activeLoot.Clear();
+        activeLootCells.Clear();
 
         if (lootPrefab == null) return; // забыли кинуть префаб — просто ничего не ставим
 
@@ -315,7 +352,9 @@ public class GridManager : MonoBehaviour
 
             LootItem loot = Instantiate(lootPrefab, pos, Quaternion.identity, mapRoot);
             loot.SetRarity(rarity);
+            loot.gameObject.SetActive(false); // пока туман — прячем сразу, RevealArea откроет что надо
             activeLoot.Add(loot.gameObject);
+            activeLootCells.Add(picked);
         }
     }
 

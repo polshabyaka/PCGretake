@@ -78,6 +78,9 @@ public class Player : MonoBehaviour
         gridX = nx;
         gridY = ny;
 
+        // туман разгоняем сразу при шаге, чтоб чувствовалось отзывчиво
+        grid.RevealArea(gridX, gridY, grid.revealRadius);
+
         moveFrom = transform.position;
         moveTarget = grid.GridToWorld(gridX, gridY);
         moveT = 0f;

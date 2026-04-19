@@ -18,6 +18,9 @@ public class CellData
     // шаги BFS от дома; -1 = недостижимо или лес
     public int distanceFromHome = -1;
 
+    // туман войны: открыта клетка игроку или нет
+    public bool revealed = false;
+
     public CellData(int x, int y)
     {
         this.x = x;

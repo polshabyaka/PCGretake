@@ -266,14 +266,25 @@ public class GridManager : MonoBehaviour
             {
                 // шашечка по координатам, чтоб глазу было легче читать сетку
                 bool alt = (x + y) % 2 == 1;
-                cellViews[x, y].SetType(cells[x, y].type, alt, cells[x, y].revealed);
+                cellViews[x, y].SetType(cells[x, y].type, alt, cells[x, y].visibility);
             }
         }
     }
 
-    // fog of war: reveal pass — mark Manhattan diamond revealed, then refresh visuals + loot
+    // fog of war: reveal pass — demote current Visible to Explored, promote new diamond to Visible
     public void RevealArea(int centerX, int centerY, int radius)
     {
+        // pass A: всё что было Visible — теперь Explored (помним, но не видим)
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (cells[x, y].visibility == CellVisibility.Visible)
+                    cells[x, y].visibility = CellVisibility.Explored;
+            }
+        }
+
+        // pass B: ромб вокруг центра — теперь Visible
         for (int dy = -radius; dy <= radius; dy++)
         {
             for (int dx = -radius; dx <= radius; dx++)
@@ -282,18 +293,19 @@ public class GridManager : MonoBehaviour
                 int nx = centerX + dx;
                 int ny = centerY + dy;
                 if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-                cells[nx, ny].revealed = true;
+                cells[nx, ny].visibility = CellVisibility.Visible;
             }
         }
 
         // перекрашиваем всю сетку — для 20x20 это копейки
         RepaintAllCells();
 
-        // прячем/показываем лут в зависимости от того, открыта ли его клетка
+        // лут показываем только на клетках, которые СЕЙЧАС видны
+        // explored и unseen — прячем
         for (int i = 0; i < activeLoot.Count; i++)
         {
             Vector2Int cellPos = activeLootCells[i];
-            bool visible = cells[cellPos.x, cellPos.y].revealed;
+            bool visible = cells[cellPos.x, cellPos.y].visibility == CellVisibility.Visible;
             if (activeLoot[i] != null)
                 activeLoot[i].SetActive(visible);
         }

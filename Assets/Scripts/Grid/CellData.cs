@@ -7,6 +7,15 @@ public enum CellType
     Forest // деревья, ходить нельзя
 }
 
+// три состояния тумана войны
+// (никогда не видели / видели раньше / сейчас в поле зрения)
+public enum CellVisibility
+{
+    Unseen,
+    Explored,
+    Visible
+}
+
 // tiny data bag for one cell, no Unity stuff here on purpose
 // (так легче потом юзать для Dijkstra и всего такого)
 public class CellData
@@ -18,8 +27,8 @@ public class CellData
     // шаги BFS от дома; -1 = недостижимо или лес
     public int distanceFromHome = -1;
 
-    // туман войны: открыта клетка игроку или нет
-    public bool revealed = false;
+    // туман войны: три состояния — никогда/раньше/сейчас
+    public CellVisibility visibility = CellVisibility.Unseen;
 
     public CellData(int x, int y)
     {

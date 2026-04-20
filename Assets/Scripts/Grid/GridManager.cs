@@ -284,16 +284,22 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        // pass B: ромб вокруг центра — теперь Visible
+        // pass B: круглик вокруг центра, плюс линия обзора — теперь Visible
+        // PCG: circular visibility radius
+        int r2 = radius * radius;
         for (int dy = -radius; dy <= radius; dy++)
         {
             for (int dx = -radius; dx <= radius; dx++)
             {
-                if (Mathf.Abs(dx) + Mathf.Abs(dy) > radius) continue; // ромбик, не квадрат
+                if (dx * dx + dy * dy > r2) continue; // круглик, не квадрат и не ромб
                 int nx = centerX + dx;
                 int ny = centerY + dy;
                 if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-                cells[nx, ny].visibility = CellVisibility.Visible;
+
+                // центр всегда видно, линию самим в себя тянуть нечего
+                // лес по дороге — прячем всё что за ним (сам лес остаётся виден)
+                if ((dx == 0 && dy == 0) || HasLineOfSight(centerX, centerY, nx, ny))
+                    cells[nx, ny].visibility = CellVisibility.Visible;
             }
         }
 
@@ -308,6 +314,35 @@ public class GridManager : MonoBehaviour
             bool visible = cells[cellPos.x, cellPos.y].visibility == CellVisibility.Visible;
             if (activeLoot[i] != null)
                 activeLoot[i].SetActive(visible);
+        }
+    }
+
+    // PCG: line of sight (Bresenham)
+    // идём по клеткам от центра к цели; любой лес "посередине" перекрывает обзор
+    // саму стартовую и финальную клетку на лес не проверяем,
+    // так что дерево-блокер остаётся видимым, а то что ЗА ним — уже нет
+    bool HasLineOfSight(int cx, int cy, int tx, int ty)
+    {
+        if (cx == tx && cy == ty) return true; // подстраховка, чтоб не зациклиться
+
+        int dx = Mathf.Abs(tx - cx);
+        int dy = Mathf.Abs(ty - cy);
+        int sx = cx < tx ? 1 : -1;
+        int sy = cy < ty ? 1 : -1;
+        int err = dx - dy;
+
+        int x = cx;
+        int y = cy;
+
+        while (true)
+        {
+            // шаг по Брезенхэму
+            int e2 = 2 * err;
+            if (e2 > -dy) { err -= dy; x += sx; }
+            if (e2 <  dx) { err += dx; y += sy; }
+
+            if (x == tx && y == ty) return true; // дошли, цель сама себя не блочит
+            if (cells[x, y].type == CellType.Forest) return false; // промежуточный лес — стоп
         }
     }
 

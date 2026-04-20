@@ -1,7 +1,8 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // grid-step movement with a little slide between cells
-// зажал клавишу — шагаем дальше, никаких диагоналей
+// зажал клавишу — шагаем дальше; ЛКМ по клетке — автопуть через A*
 public class Player : MonoBehaviour
 {
     // где мы сейчас на сетке
@@ -19,6 +20,18 @@ public class Player : MonoBehaviour
     Vector3 moveFrom;
     Vector3 moveTarget;
     float moveT;
+
+    // очередь клеток от A* — по одной за слайд
+    List<Vector2Int> path;
+    int pathIndex;
+
+    // кэшируем камеру один раз, чтоб не дёргать Camera.main каждый клик
+    Camera cam;
+
+    void Start()
+    {
+        cam = Camera.main;
+    }
 
     void Update()
     {
@@ -47,8 +60,12 @@ public class Player : MonoBehaviour
             {
                 transform.position = Vector3.Lerp(moveFrom, moveTarget, moveT);
             }
-            return; // пока едем — клавиши не слушаем, а то застрянем посерединке
+            return; // пока едем — ничего не слушаем, а то застрянем посерединке
         }
+
+        // ЛКМ по клетке — прокладываем маршрут A*
+        if (Input.GetMouseButtonDown(0) && cam != null && grid != null)
+            TryClickToMove();
 
         // GetKey, чтобы зажатие продолжало шагать без долбёжки по клавише
         // вертикаль первее, чтоб случайно не поехать по диагонали
@@ -60,14 +77,43 @@ public class Player : MonoBehaviour
             StartStep(-1, 0);
         else if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow))
             StartStep(1, 0);
+
+        // если клавиш нет и есть очередь из A* — делаем следующий шаг
+        if (!isMoving && path != null && pathIndex < path.Count)
+        {
+            Vector2Int next = path[pathIndex];
+            pathIndex++;
+            StartStepTo(next.x, next.y);
+            if (pathIndex >= path.Count) CancelPath(); // дошли, чистим
+        }
     }
 
-    // начинаем шаг на одну клеточку, если можно
+    // мышь -> клетка -> A* -> запомнить маршрут
+    void TryClickToMove()
+    {
+        Vector3 world = cam.ScreenToWorldPoint(Input.mousePosition);
+        world.z = 0f;
+
+        if (!grid.TryWorldToGrid(world, out int tx, out int ty)) return;
+
+        List<Vector2Int> found = Pathfinder.FindPath(grid, gridX, gridY, tx, ty);
+        if (found == null || found.Count <= 1) return; // нет пути или та же клетка
+
+        path = found;
+        pathIndex = 1; // нулевой элемент — это мы сами, пропускаем
+    }
+
+    // манул-шаг с клавиатуры — он всегда перебивает автопуть
     void StartStep(int dx, int dy)
     {
-        int nx = gridX + dx;
-        int ny = gridY + dy;
+        CancelPath();
+        StartStepTo(gridX + dx, gridY + dy);
+    }
 
+    // общий старт слайда на конкретную соседнюю клетку
+    // используется и клавишами, и очередью A*
+    void StartStepTo(int nx, int ny)
+    {
         // стенки карты, дальше нельзя
         if (nx < 0 || nx >= grid.width) return;
         if (ny < 0 || ny >= grid.height) return;
@@ -85,5 +131,12 @@ public class Player : MonoBehaviour
         moveTarget = grid.GridToWorld(gridX, gridY);
         moveT = 0f;
         isMoving = true;
+    }
+
+    // очистить очередь автопути — зовётся и самим игроком, и GridManager при R
+    public void CancelPath()
+    {
+        path = null;
+        pathIndex = 0;
     }
 }

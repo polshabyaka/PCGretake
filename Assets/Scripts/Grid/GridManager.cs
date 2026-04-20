@@ -391,6 +391,7 @@ public class GridManager : MonoBehaviour
 
         player.gridX = cx;
         player.gridY = cy;
+        player.CancelPath(); // на R не хотим чтоб он дошагивал старый маршрут
     }
 
     // grid coords -> world position
@@ -401,5 +402,16 @@ public class GridManager : MonoBehaviour
         float offsetX = (width - 1) * 0.5f;
         float offsetY = (height - 1) * 0.5f;
         return new Vector3(x - offsetX, y - offsetY, 0f);
+    }
+
+    // обратная операция для GridToWorld — мир -> клетка
+    // true если попало внутрь сетки, false если мимо (клик за пределами)
+    public bool TryWorldToGrid(Vector3 world, out int gx, out int gy)
+    {
+        float offsetX = (width - 1) * 0.5f;
+        float offsetY = (height - 1) * 0.5f;
+        gx = Mathf.RoundToInt(world.x + offsetX);
+        gy = Mathf.RoundToInt(world.y + offsetY);
+        return gx >= 0 && gx < width && gy >= 0 && gy < height;
     }
 }

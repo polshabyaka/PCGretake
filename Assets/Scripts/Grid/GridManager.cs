@@ -429,6 +429,28 @@ public class GridManager : MonoBehaviour
         player.CancelPath(); // на R не хотим чтоб он дошагивал старый маршрут
     }
 
+    // PCG: collectible pickup — LevelGoal asks us to remove a loot at given cell
+    // возвращает true если что-то реально забрали с этой клетки
+    public bool TryPickupLootAt(int x, int y)
+    {
+        for (int i = 0; i < activeLootCells.Count; i++)
+        {
+            Vector2Int p = activeLootCells[i];
+            if (p.x == x && p.y == y)
+            {
+                // сносим объект и чистим оба параллельных списка
+                if (activeLoot[i] != null) Destroy(activeLoot[i]);
+                activeLoot.RemoveAt(i);
+                activeLootCells.RemoveAt(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // сколько сейчас лута на карте — LevelGoal берёт это как total "Y"
+    public int LootCount { get { return activeLoot.Count; } }
+
     // grid coords -> world position
     // shift so the grid sits nicely around (0,0)
     // (иначе всё уезжает в правый верх, некрасиво)

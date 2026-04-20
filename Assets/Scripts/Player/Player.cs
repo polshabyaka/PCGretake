@@ -25,6 +25,10 @@ public class Player : MonoBehaviour
     List<Vector2Int> path;
     int pathIndex;
 
+    // PCG: level completion — ставится в true когда все монетки собраны
+    // пока true — не слушаем никакой ввод (клавиши, мышь, шаги A*)
+    public bool inputLocked;
+
     // кэшируем камеру один раз, чтоб не дёргать Camera.main каждый клик
     Camera cam;
 
@@ -62,6 +66,9 @@ public class Player : MonoBehaviour
             }
             return; // пока едем — ничего не слушаем, а то застрянем посерединке
         }
+
+        // after Completed! — dno of input, тихо стоим пока LevelGoal не разблокирует
+        if (inputLocked) return;
 
         // ЛКМ по клетке — прокладываем маршрут A*
         if (Input.GetMouseButtonDown(0) && cam != null && grid != null)
@@ -138,5 +145,18 @@ public class Player : MonoBehaviour
     {
         path = null;
         pathIndex = 0;
+    }
+
+    // hard stop: cancel A* queue AND kill current slide
+    // нужно чтобы после Completed! игрок не доезжал и не догонял старый путь
+    public void ForceStop()
+    {
+        CancelPath();
+        if (isMoving)
+        {
+            transform.position = moveTarget; // доезжаем ровно на клетку, чтоб не висеть между
+            isMoving = false;
+        }
+        moveT = 0f;
     }
 }

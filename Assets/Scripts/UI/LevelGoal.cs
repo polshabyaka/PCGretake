@@ -50,7 +50,13 @@ public class LevelGoal : MonoBehaviour
                 messageText.text = "";
         }
 
-        if (completed) return; // after win — ignore E
+        if (completed)
+        {
+            // PCG: level completion — R restarts the whole loop, not just the map
+            if (Input.GetKeyDown(KeyCode.R))
+                RestartLevel();
+            return; // после Completed! никакого E
+        }
 
         // PCG: collectible pickup
         if (Input.GetKeyDown(KeyCode.E))
@@ -97,5 +103,32 @@ public class LevelGoal : MonoBehaviour
     {
         completed = true;
         if (completionPanel != null) completionPanel.SetActive(true);
+
+        // стоп-кран игроку: и инпут, и текущий слайд, и очередь A*
+        if (player != null)
+        {
+            player.inputLocked = true;
+            player.ForceStop();
+        }
+    }
+
+    // PCG: level completion — full restart after win
+    // карту пересоздаёт GridManager по той же R в своём Update, мы тут чистим своё
+    void RestartLevel()
+    {
+        if (completionPanel != null) completionPanel.SetActive(false);
+        if (messageText != null) messageText.text = "";
+        messageTimer = 0f;
+
+        picked = 0;
+        completed = false;
+        initialized = false; // на следующем кадре заново прочтём LootCount и покажем "Find all coins"
+
+        // разблокируем игрока и снова гасим любую пендящую траекторию на всякий случай
+        if (player != null)
+        {
+            player.inputLocked = false;
+            player.ForceStop();
+        }
     }
 }

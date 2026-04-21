@@ -50,13 +50,14 @@ public class LevelGoal : MonoBehaviour
                 messageText.text = "";
         }
 
-        if (completed)
+        // PCG: level completion — R always resets the full goal state (even mid-play)
+        if (Input.GetKeyDown(KeyCode.R))
         {
-            // PCG: level completion — R restarts the whole loop, not just the map
-            if (Input.GetKeyDown(KeyCode.R))
-                RestartLevel();
-            return; // после Completed! никакого E
+            RestartLevel();
+            return;
         }
+
+        if (completed) return; // после Completed! E игнорим
 
         // PCG: collectible pickup
         if (Input.GetKeyDown(KeyCode.E))

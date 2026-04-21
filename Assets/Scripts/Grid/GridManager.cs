@@ -377,21 +377,35 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        SpawnLootBand(commonCells, commonLootCount, LootRarity.Common);
-        SpawnLootBand(uncommonCells, uncommonLootCount, LootRarity.Uncommon);
-        SpawnLootBand(rareCells, rareLootCount, LootRarity.Rare);
+        // shared across rarities: никто ни с кем не встанет вплотную
+        List<Vector2Int> takenCells = new List<Vector2Int>();
+
+        SpawnLootBand(commonCells, commonLootCount, LootRarity.Common, takenCells);
+        SpawnLootBand(uncommonCells, uncommonLootCount, LootRarity.Uncommon, takenCells);
+        SpawnLootBand(rareCells, rareLootCount, LootRarity.Rare, takenCells);
     }
 
     // берём count случайных клеток без повторов и ставим на них лут
-    void SpawnLootBand(List<Vector2Int> band, int count, LootRarity rarity)
+    // taken — общий список уже занятых клеток, чтоб рарные не лепились к обычным
+    void SpawnLootBand(List<Vector2Int> band, int count, LootRarity rarity, List<Vector2Int> taken)
     {
-        int actual = Mathf.Min(count, band.Count);
-        for (int i = 0; i < actual; i++)
+        // shuffle band in place — тот же рандом что и у swap-with-random
+        for (int i = 0; i < band.Count; i++)
         {
-            // swap-with-random — достаём уникальные клетки, никто не дублируется
             int j = Random.Range(i, band.Count);
-            Vector2Int picked = band[j];
-            band[j] = band[i];
+            Vector2Int tmp = band[i];
+            band[i] = band[j];
+            band[j] = tmp;
+        }
+
+        int placed = 0;
+        for (int i = 0; i < band.Count && placed < count; i++)
+        {
+            Vector2Int picked = band[i];
+
+            // PCG: prevent adjacent loot placement
+            // та же клетка или любой из 8 соседей — мимо, ищем дальше
+            if (IsTooCloseToTaken(picked, taken)) continue;
 
             // чуть вытаскиваем вперёд по z, чтоб кружок рисовался поверх клетки
             Vector3 cellPos = GridToWorld(picked.x, picked.y);
@@ -402,7 +416,22 @@ public class GridManager : MonoBehaviour
             loot.gameObject.SetActive(false); // пока туман — прячем сразу, RevealArea откроет что надо
             activeLoot.Add(loot.gameObject);
             activeLootCells.Add(picked);
+            taken.Add(picked);
+            placed++;
         }
+        // если band закончился а слотов не добрали — просто кладём сколько получилось
+    }
+
+    // Chebyshev <= 1 check: same cell or any of the 8 neighbors counts as too close
+    bool IsTooCloseToTaken(Vector2Int p, List<Vector2Int> taken)
+    {
+        for (int i = 0; i < taken.Count; i++)
+        {
+            int dx = Mathf.Abs(p.x - taken[i].x);
+            int dy = Mathf.Abs(p.y - taken[i].y);
+            if (dx <= 1 && dy <= 1) return true;
+        }
+        return false;
     }
 
     // spawn the player right on the home cell, or teleport him back there on R
